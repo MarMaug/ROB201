@@ -4,6 +4,7 @@ import random as rd
 import numpy as np
 
 
+
 def reactive_obst_avoid(lidar):
     """
     Simple obstacle avoidance
@@ -13,7 +14,6 @@ def reactive_obst_avoid(lidar):
     index = np.where(angles == 0)[0][0]
     distances = lidar.get_sensor_values()
     maximum = np.max(distances)
-    print(distances, maximum)
     rotation = rd.uniform(-1, 1)
 
     if distances[index] < 50:
@@ -68,12 +68,12 @@ def potential_field_control(lidar, pose, goal):
 
     # calcul de la distance à l'objectif et la direction de l'objectif dans le repère local du robot
     position = np.array([pose[0], pose[1]])
-    but = np.array(goal[0], goal[1])
+    but = np.array([goal[0], goal[1]])
     ecart = but - position
     d = np.linalg.norm(ecart)
     # expression du gradient attractif dans le repère robot à partir de l'expression
     # de la position goal dans le repère du robot
-
+    
     # potentiel conique
     if d > d_chang:
         grad_obj = (k_cone / d) * np.array([ecart[0], ecart[1]])
@@ -81,8 +81,11 @@ def potential_field_control(lidar, pose, goal):
         # potentiel quadratique
         grad_obj = k_quad * np.array([ecart[0], ecart[1]])
     else:
+        
         # on est arrivé
         command = {"forward": 0, "rotation": 0}
+        print("on est arrivés !")
+        
         return command
 
     grad_pose = grad_obj - grad_rep
@@ -90,22 +93,27 @@ def potential_field_control(lidar, pose, goal):
     # Normalisez
     grad_angle_norm = np.arctan2(grad_pose[1], grad_pose[0]) / np.pi
     grad_rep_norm = np.clip(grad_pose, -1, 1)
-
+    
+    if d < 50:
+        forward = np.clip(
+            np.linalg.norm(grad_rep_norm) * np.cos(grad_angle_norm), -5, 5
+        )
+        rotation = np.linalg.norm(grad_rep_norm) * -np.sin(grad_angle_norm)
+        command = {"forward": forward, "rotation": rotation}
+        return command
+    
     # Déduire une commande
     if np.abs(grad_angle_norm) > np.pi / 2:
         if grad_angle_norm > 0:
-            command = {"forward": 0, "rotation": 1}
+            command = {"forward": 0, "rotation": 5}
         else:
-            command = {"forward": 0, "rotation": -1}
+            command = {"forward": 0, "rotation": -5}
     else:
         forward = np.clip(
-            np.linalg.norm(grad_rep_norm) * np.cos(grad_angle_norm), -1, 1
+            np.linalg.norm(grad_rep_norm) * np.cos(grad_angle_norm), -5, 5
         )
         rotation = np.clip(
-            np.linalg.norm(grad_rep_norm) * np.sin(grad_angle_norm), -1, 1
+            np.linalg.norm(grad_rep_norm) * np.sin(grad_angle_norm), -5, 5
         )
         command = {"forward": forward, "rotation": rotation}
-
-    # Ajustez vos paramètres
-
     return command

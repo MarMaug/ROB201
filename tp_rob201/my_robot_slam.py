@@ -32,7 +32,7 @@ class MyRobotSlam(RobotAbstract):
         self.counter = 0
 
         # Init SLAM object
-        self._size_area = (800, 800)
+        self._size_area = (1113, 750)
         self.tiny_slam = TinySlam(
             x_min=-self._size_area[0],
             x_max=self._size_area[0],
@@ -49,12 +49,13 @@ class MyRobotSlam(RobotAbstract):
         Main control function executed at each time step
         """
         self.counter += 1
+        
+        # Localising and exploring
         self.tiny_slam.localise(self.lidar(), self.odometer_values())
         self.tiny_slam.update_map(self.lidar(), self.odometer_values())
 
         # Compute new command speed to perform obstacle avoidance
         command = potential_field_control(
-            self.lidar(), self.odometer_values(), np.array([100, 100, np.pi])
-        )
-
+            self.lidar(), self.odometer_values(), np.array([70, 120, np.pi]))
+        
         return command

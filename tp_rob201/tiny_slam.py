@@ -2,11 +2,13 @@
 
 import pickle
 from math import dist
+from math import pi
 import random
 import cv2
 import numpy as np
 from matplotlib import pyplot as plt
-
+from collections import defaultdict
+import heapq
 
 class TinySlam:
     """Simple occupancy grid SLAM"""
@@ -24,9 +26,10 @@ class TinySlam:
         )
 
         self.occupancy_map = np.zeros((int(self.x_max_map), int(self.y_max_map)))
-
+        self.counter = 0
         # Origin of the odom frame in the map frame
         self.odom_pose_ref = np.array([0, 0, 0])
+        self.path = []
 
     def _conv_world_to_map(self, x_world, y_world):
         """
@@ -135,7 +138,6 @@ class TinySlam:
         lidar : placebot object with lidar data
         pose : [x, y, theta] nparray, position of the robot to evaluate, in world coordinates
         """
-        # TODO for TP4
 
         angles = lidar.get_ray_angles()
         distances = lidar.get_sensor_values()
@@ -153,7 +155,7 @@ class TinySlam:
         angles = angles[indice_bin]
 
         # Convertir ces positions dans le repère de la carte
-        (x_map_obs, y_map_obs) = self._conv_world_to_map(x_world_obs, y_world_obs)
+        x_map_obs, y_map_obs = self._conv_world_to_map(x_world_obs, y_world_obs)
 
         # Supprimer les points hors de la carte
         x_dans_la_map = np.where((0 < x_map_obs) & (x_map_obs < self.x_max_map))
@@ -177,20 +179,17 @@ class TinySlam:
         odom_pose_ref : optional, origin of the odom frame if given,
                         use self.odom_pose_ref if not given
         """
-        # TODO for TP4
-
+        odom_pose = np.zeros(3)
+        
         if odom_pose_ref is None:
             odom_pose_ref = self.odom_pose_ref
 
-        corrected_pose = np.zeros(3)
-        dO = np.sqrt(odom[0] ** 2 + odom[1] ** 2)
-        angle = odom[2] + odom_pose_ref[2]
-        corrected_pose[0] = odom_pose_ref[0] + dO * np.cos(angle)
-        corrected_pose[1] = odom_pose_ref[1] + dO * np.sin(angle)
-        corrected_pose[2] = angle
-
-        return corrected_pose
-
+        odom_pose[0] = odom[0] + self.odom_pose_ref[0]*np.cos(odom[2] + self.odom_pose_ref[2])
+        odom_pose[1] = odom[1] + self.odom_pose_ref[0]*np.sin(odom[2] + self.odom_pose_ref[2])
+        odom_pose[2] = odom[2] + self.odom_pose_ref[2]
+            
+        return odom_pose
+    
     def localise(self, lidar, odom):
         """
         Compute the robot position wrt the map, and updates the odometry reference
@@ -199,8 +198,6 @@ class TinySlam:
         """
 
         sigma = 0.1
-
-        # TODO for TP4
 
         N = 0
         # Calculez le score du scan laser avec la position de référence actuelle de l’odométrie (self.odom_pose_ref)
@@ -224,7 +221,7 @@ class TinySlam:
             N = N + 1
 
         return best_score
-
+    
     def update_map(self, lidar, pose):
         """
         Bayesian map update with new observation
@@ -268,73 +265,107 @@ class TinySlam:
                 x_world, y_world, x_world_obs_wall[i], y_world_obs_wall[i], -val
             )
         self.add_map_points(x_world_obs, y_world_obs, val + 1)
-
+        # Initial position
+        init_coord = np.array([0,0,0])
+        if self.counter % 100 == 0:
+            self.path = self.plan(init_coord,pose )
+            print("chemin mis à jour")
+        self.counter += 1
         # Seuillage des probabilités pour éviter les divergences
         self.occupancy_map[self.occupancy_map > 4] = 4
         self.occupancy_map[self.occupancy_map < -4] = -4
-        self.display2(pose)
+        self.display2(pose, self.path)
 
-    # TODO for TP5
+#########################################################################################
+
     def get_neighbors(self, current):
-        position_map = self._conv_world_to_map(current[0], current[1])
-        voisins = np.array([])
-        for i in range(-1, 1):
-            for j in range(-1, 1):
-                x = position_map[0] + i
-                y = position_map[1] + j
+        x, y = current
+        neighbors = []
 
-                # si pas un obstacle
-                if self.occupancy_map[x, y] > 0:
-                    # si toujours dans la carte
-                    if x < self.x_max_map & x > 0 & y < self.y_max_map & y > 0:
-                        # si ce n'est pas le point lui-même
-                        if j != 0 & i != 0:
-                            voisins = np.append(voisins, [x, y])
+        for i in [-1, 0, +1]:
+            for j in [-1, 0, +1]:
+                if i == 0 and j == 0:
+                    continue
 
-        return voisins
+                new_x, new_y = x+i, y+j
+                if (new_x < 0 or new_x >= self.x_max_map or
+                    new_y < 0 or new_y >= self.y_max_map):
+                    continue
 
-    # TODO for TP5
-    def heuristic(self, a, b):
-        return dist(a, b)
+                neighbors.append((new_x, new_y))
 
-    def reconstruct_path(self, cameFrom, current):
+        return neighbors
+
+    # Def de la distance euclidienne, déjà dans le package math
+    def h(self, a, b):
+        x_a, y_a = a
+        x_b, y_b = b
+
+        # euclidean distance
+        return np.sqrt( (x_b - x_a)**2 + (y_b - y_a)**2 )
+
+    # Fonction pour remonter le chemin
+    def reconstruct_path(self, cameFrom, current_id, current):
+        
+        # Initialisation du chemin : On commence par le noeud actuel
         total_path = [current]
-        while current in cameFrom.Keys:
-            current = cameFrom[current]
+        
+        # Si le noeud actuel est dans cameFrom, ca veut dire qu'il a un prédecesseur
+        while current_id in cameFrom.keys():
+            current = cameFrom[tuple(current)]
             np.append(total_path, current)
         return total_path
 
-    def A_Star(self, start, goal, h):
-        openSet = [start]
-        cameFrom = []
-        gScore = np.array([])
-        gScore[start] = 0
 
-        fScore = gScore
-        fScore[start] = self.heuristic(start, goal)
-
+    def A_Star(self, start, goal):
+        #Initialisation
+        
+        openSet = [tuple(start)]           # 1er point observé : le start
+        
+        cameFrom = {}               # Noeud juste avt le départ : aucun (c'est normal) 
+        
+        gScore = defaultdict(lambda: 10e7)
+        
+        gScore[tuple(start)] = 0      # Meilleur score connu entre le start et notre noeud initial : 0
+        
+        visited_nodes = []
+        
+        fScore = gScore        
+        fScore[tuple(start)] = self.h(start, goal) # Meilleur score connu entre le start et le goal : dist(start, goal)
+        
+        # Tant que l'on a des noeuds découverts à explorer
         while openSet != []:
+
+            # On selectionne le noeud le plus proche de l'arrivée
             current = openSet[np.argmin(fScore)]
+            visited_nodes.append(current)
+            
+            # Si c'est le noeud d'arrivée : Top !
             if current == goal:
                 return self.reconstruct_path(cameFrom, current)
-            openSet.remove(current)
-            voisins = self.get_neighbors(current)
-            tentative_gScore = np.zeros(len(voisins))
-            for i, value in enumerate(voisins):
-                ce_voisin = value
-                tentative_gScore[i] = gScore[current] + self.heuristic(
-                    current, ce_voisin
-                )
-                if tentative_gScore < gScore[ce_voisin]:
-                    cameFrom[ce_voisin] = current
-                    gScore[ce_voisin] = tentative_gScore
-                    fScore[ce_voisin] = tentative_gScore + self.heuristic(
-                        ce_voisin, goal
-                    )
-                    if ce_voisin not in openSet:
-                        openSet.append(ce_voisin)
+            
+            # Sinon : 
+            openSet.remove(current)                     # On note le noeud comme étant exploré
+            voisins = self.get_neighbors(current)       # On regarde ses voisins
+            # Pour tous ses voisins :    
+            for i, ce_voisin in enumerate(voisins):
 
-        return failure
+                # On regarde la distance entre le start et ce voisin à travers le noeud courant
+                tentative_gScore = gScore[tuple(current)] + self.h(current, ce_voisin)
+                
+                # Si ce chemin start->voisin est meilleur qu'un autre déjà enregistré, on le met à jour
+                if (tentative_gScore < gScore[tuple(ce_voisin)]):
+                    cameFrom[tuple(ce_voisin)] = current
+                    gScore[tuple(ce_voisin)] = tentative_gScore
+                    fScore[tuple(ce_voisin)] = tentative_gScore + self.h(ce_voisin, goal)  # On met aussi à jour le fScore
+                    
+                    # On ajoute le voisin dans les noeuds à étudier si ce n'est pas déjà le cas
+                    if ce_voisin not in openSet:
+                        if ce_voisin not in visited_nodes:
+                            openSet.append(ce_voisin)
+            
+        print("Echec")
+        return []
 
     def plan(self, start, goal):
         """
@@ -342,12 +373,87 @@ class TinySlam:
         start : [x, y, theta] nparray, start pose in world coordinates
         goal : [x, y, theta] nparray, goal pose in world coordinates
         """
-        # TODO for TP5
-        start_map = self._conv_world_to_map(start)
-        goal_map = self._conv_world_to_map(goal)
 
-        path = [start, goal]  # list of poses
-        return path
+        # convert from world to map coordinates
+        start = self._conv_world_to_map(start[0], -start[1])
+        goal  = self._conv_world_to_map(goal[0], -goal[1])
+
+        # print(f'start: {start} goal: {goal}')
+
+        # heapq initialization
+        priority_heap = [(0, start)]
+        visited_nodes = set()
+
+        # 
+        parent_nodes = {start: None}
+
+        # scores dictionaries
+        g_values = {start: 0}
+        f_values = {start: self.h(start, goal)}
+
+        # print('plan')
+# 
+        # loop util heap is empty, meaning: no path found or goal found
+        while priority_heap:
+            # print('while')
+            # pop node with smallest f value
+            _, current_node = heapq.heappop(priority_heap)
+
+            # print(f'current_node: {current_node}')
+
+            # if goal was found, reconstruct path and return it
+            if current_node == goal:
+                path = []
+
+                while current_node is not None:
+                    # print('path')
+                    path.append(current_node)
+                    current_node = parent_nodes[current_node]
+
+                # return reverse path
+                return path[::-1]
+
+            # goal not found, store current node as visited and continue searching
+            visited_nodes.add(current_node)
+
+            neighbors = self.get_neighbors(current_node)
+            # print(f'neighbors: {neighbors}')
+
+            # loop through possible movements
+            for neighbor in neighbors:
+                # print(f'neighbor: {neighbor}')
+                # print('neighbor')
+
+                x_valid = 0 <= neighbor[0] < self.x_max_map
+                y_valid = 0 <= neighbor[1] < self.y_max_map
+                notObstacule = self.occupancy_map[neighbor[0]][neighbor[1]] < 0.75*4
+
+                #print(f'{x_valid} {y_valid} {notObstacule}')
+
+                # check if neighbor is inside bounders and is not an obstacle
+                if x_valid and y_valid and notObstacule:
+                    # compute neighbor's g value
+                    tentative_g_value = g_values[current_node] + self.h(current_node, neighbor)
+
+                    # print(f'tentative_g_value: {tentative_g_value}')
+                    # print(f'visited_nodes: {visited_nodes}')
+                    # print(f'g_values: {g_values.get(neighbor, 0)}')
+
+                    # 
+                    if neighbor in visited_nodes and tentative_g_value >= g_values.get(neighbor, 0):
+                        continue
+
+                    parent_nodes[neighbor] = current_node
+                    g_values[neighbor] = tentative_g_value
+                    f_values[neighbor] = tentative_g_value + self.h(neighbor, goal)
+
+                    heapq.heappush(priority_heap, (f_values[neighbor], neighbor))
+
+            # break
+
+        # if heap is empty and no path was found
+        return None
+#########################################################################################
 
     def display(self, robot_pose):
         """
@@ -384,7 +490,7 @@ class TinySlam:
         # plt.show()
         plt.pause(0.001)
 
-    def display2(self, robot_pose):
+    def display2(self, robot_pose, path):
         """
         Screen display of map and robot pose,
         using opencv (faster than the matplotlib version)
@@ -403,10 +509,28 @@ class TinySlam:
 
         pt1_x, pt1_y = self._conv_world_to_map(robot_pose[0], -robot_pose[1])
 
-        # print("robot_pose", robot_pose)
+        #print("robot_pose", robot_pose)
         pt1 = (int(pt1_x), int(pt1_y))
         pt2 = (int(pt2_x), int(pt2_y))
         cv2.arrowedLine(img=img2, pt1=pt1, pt2=pt2, color=(0, 0, 255), thickness=2)
+        
+        for node in path:
+            pt_node = (node[0], node[1])
+            cv2.circle(img2, pt_node, 1, color=(0, 0, 255), thickness=2)
+        
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        org = (50, 50)
+        org2 = (50, 70)
+        fontScale = 0.5
+        color = (0, 0, 0)
+        thickness = 1
+        cv2.putText(img2, "x pos : " + str(round(robot_pose[0])), org, font, 
+                        fontScale, color, thickness, cv2.LINE_AA)
+        cv2.putText(img2, "y pos : " + str(round(robot_pose[1])), org2, font, 
+                        fontScale, color, thickness, cv2.LINE_AA)
+        
+        goal = self._conv_world_to_map(70, -120)
+        cv2.circle(img2, goal, 2, color=(255, 255, 255), thickness=3)
         cv2.imshow("map slam", img2)
         cv2.waitKey(1)
 
