@@ -509,9 +509,8 @@ class TinySlam:
         
         # Si la touche "s" est appuyée, exécuter l'action souhaitée
         if key == ord('s'):
-            
+
             filename = input("Entrez le nom du fichier : ") 
-            #filename = "/images/" + filename   
             x = 50  # coordonnée x du coin supérieur gauche de la zone à sélectionner
             y = 150  # coordonnée y du coin supérieur gauche de la zone à sélectionner
             w = 600  # largeur de la zone à sélectionner
