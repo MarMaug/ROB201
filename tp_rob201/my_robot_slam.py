@@ -10,6 +10,8 @@ from place_bot.entities.odometer import OdometerParams
 from place_bot.entities.lidar import LidarParams
 from tiny_slam import TinySlam
 from control import potential_field_control
+from math import dist
+from time import time
 
 
 # Definition of our robot controller
@@ -27,10 +29,7 @@ class MyRobotSlam(RobotAbstract):
             lidar_params=lidar_params,
             odometer_params=odometer_params,
         )
-
-        # step counter to deal with init and display
-        self.counter = 0
-
+        
         # Init SLAM object
         self._size_area = (1113, 750)
         self.tiny_slam = TinySlam(
@@ -43,19 +42,36 @@ class MyRobotSlam(RobotAbstract):
 
         # storage for pose after localization
         self.corrected_pose = np.array([0, 0, 0])
-
+          
+        # Counter to follow the path back to the start
+        self.counter = 0
+        
     def control(self):
         """
         Main control function executed at each time step
         """
-        self.counter += 1
-        
+      
         # Localising and exploring
         self.tiny_slam.localise(self.lidar(), self.odometer_values())
         self.tiny_slam.update_map(self.lidar(), self.odometer_values())
 
         # Compute new command speed to perform obstacle avoidance
-        command = potential_field_control(
-            self.lidar(), self.odometer_values(), np.array([70, 120, np.pi]))
-        
-        return command
+        command = potential_field_control(self.lidar(), self.tiny_slam.get_corrected_pose(self.odometer_values(), None), self.tiny_slam.goal)
+
+        # Si on est arrivé
+        if dist(self.tiny_slam.get_corrected_pose(self.odometer_values(), None), self.tiny_slam.goal) <=10:
+            
+            if self.tiny_slam.counter == 1:
+                start = time()
+                self.tiny_slam.path = self.tiny_slam.plan(np.array([0, 0, 0]), self.tiny_slam.get_corrected_pose(self.odometer_values(), None) )
+                print("Temps de calcul du chemin : ", round(time() - start,3), " s.")
+                self.tiny_slam.counter = 0
+                self.counter = 0
+            else:
+                #print("Trop proche du nouveau goal : on actualise")
+                if self.counter < len(self.tiny_slam.path)-3:
+                    self.counter+=3
+                    self.tiny_slam.goal = np.array([self.tiny_slam._conv_map_to_world(self.tiny_slam.path[self.counter][0],self.tiny_slam.path[self.counter][1])[0],
+                              - self.tiny_slam._conv_map_to_world(self.tiny_slam.path[self.counter][0],self.tiny_slam.path[self.counter][1])[1], np.pi])
+                
+        return command 

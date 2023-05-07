@@ -1,10 +1,10 @@
 """ A set of robotics control functions """
 import random as rd
-
+from math import dist
 import numpy as np
 
 
-
+# Fonction obsolete
 def reactive_obst_avoid(lidar):
     """
     Simple obstacle avoidance
@@ -24,7 +24,7 @@ def reactive_obst_avoid(lidar):
 
     return command
 
-
+# Vraie fonction de recherche du goal
 def potential_field_control(lidar, pose, goal):
     """
     Control using potential field for goal reaching and obstacle avoidance
@@ -32,88 +32,68 @@ def potential_field_control(lidar, pose, goal):
     pose : [x, y, theta] nparray, current pose in odom or world frame
     goal : [x, y, theta] nparray, target pose in odom or world frame
     """
-    
-    k_cone = 0.1
-    d_safe = 200
-    k_obs = 1000
-    d_chang = 30
-    r_valid = 10
-    k_quad = k_cone / d_chang
 
-    # Conversion du goal dans le repère du robot
-    # goal_x_rob = goal[0]*np.cos(theta_rob)+goal[1]*np.sin(theta_rob)
-    # goal_y_rob = -goal[0]*np.sin(theta_rob)+goal[1]*np.cos(theta_rob)
-    # goal_angle = goal[2]-theta_rob
-    # goal_rob = np.array([goal_x_rob,goal_y_rob,goal_angle])
+    d_change = 50
+    r_min = 10
+    d_safe = 20
 
-    # Calcul du gradient objectif
-    # Commencez par récupérer vos données LIDAR (lidar.get_sensor_values() & lidar.get_ray_angles())
-    # et extrayez l'indice correspondant à la distance la plus courte
-    angles = lidar.get_ray_angles()
+    # On récupère les données 
     distances = lidar.get_sensor_values()
-    indice_min = np.argmin(distances)
-    dmin = distances[indice_min]
-    angle_min = angles[indice_min]
-
-    # Calcul du gradient répulsif
-    # Calculez votre vecteur répulsif selon la formule proposée en cours
-    if dmin < d_safe:
-        grad_rep = (
-            (k_obs / dmin**3)
-            * ((1 / dmin) - (1 / d_safe))
-            * (dmin * np.array([np.cos(angle_min), np.sin(angle_min)]))
-        )
-    else:
-        grad_rep = np.array([0, 0])
-
-    # calcul de la distance à l'objectif et la direction de l'objectif dans le repère local du robot
+    angles = lidar.get_ray_angles()
+    
     position = np.array([pose[0], pose[1]])
     but = np.array([goal[0], goal[1]])
     ecart = but - position
-    d = np.linalg.norm(ecart)
-    # expression du gradient attractif dans le repère robot à partir de l'expression
-    # de la position goal dans le repère du robot
+    ecart_norm = dist(pose,goal)
+    #Détection de l'obstacle le plus proche
+    index = np.argmin(distances)
+    mindist = distances[index]
+    minangle = angles[index]
+    obstacle_position = np.array([pose[0] + mindist*np.cos(minangle+pose[2]), pose[1] + mindist*np.sin(minangle+pose[2])])
     
-    # potentiel conique
-    if d > d_chang:
-        grad_obj = (k_cone / d) * np.array([ecart[0], ecart[1]])
-    elif r_valid < d <= d_chang:
-        # potentiel quadratique
-        grad_obj = k_quad * np.array([ecart[0], ecart[1]])
-    else:
+    if mindist < d_safe :
+        Kobs = 10000
+        pregrad = Kobs/(mindist**3)*((1/mindist)-(1/d_safe))
+        gradient_obstacle = pregrad*(obstacle_position - np.array([pose[0],pose[1]]))
         
-        # on est arrivé
-        command = {"forward": 0, "rotation": 0}
-        print("on est arrivés !")
+    else :
+        gradient_obstacle = np.array([0,0])
+
+
+    #Cas éloigné - Potentiel conique.
+    if ecart_norm > d_change :
         
-        return command
+        Kcone = 0.5
+        pregrad = Kcone/np.linalg.norm(ecart)
+        gradient = np.array([pregrad*ecart[0], pregrad*ecart[1]])
+        #print("Old Gradient : ", gradient)
+        gradient = gradient - gradient_obstacle
+        #print("New Gradient : ", gradient)
+        gradient_angle = np.arctan2(gradient[1], gradient[0])
+        gradient_norme = np.linalg.norm(gradient)
+        velocity = np.clip(gradient_norme*np.cos(gradient_angle-pose[2]), -1, 1)
+        #velocity = np.clip(gradient_norme, -1, 1)
+        rotation = np.clip(gradient_norme*np.sin(gradient_angle-pose[2]), -1, 1)
 
-    grad_pose = grad_obj - grad_rep
-
-    # Normalisez
-    grad_angle_norm = np.arctan2(grad_pose[1], grad_pose[0]) / np.pi
-    grad_rep_norm = np.clip(grad_pose, -1, 1)
+    #Cas proche - Potentiel quadratique.
+    elif r_min < ecart_norm <= d_change :
+        
+        #print("Approaching the goal")
+        Kquad = 0.2/d_change
+        gradient = np.array([Kquad*ecart[0], Kquad*ecart[1]])
+        #print("Old Gradient : ", gradient)
+        gradient = gradient - gradient_obstacle
+        #print("New Gradient : ", gradient)
+        gradient_angle = np.arctan2(gradient[1], gradient[0])
+        gradient_norme = np.linalg.norm(gradient)
+        velocity = np.clip(3*gradient_norme*np.cos(gradient_angle-pose[2]), -1, 1)
+        #velocity = np.clip(gradient_norme, -1, 1)
+        rotation = np.clip(3*gradient_norme*np.sin(gradient_angle-pose[2]), -1, 1)
     
-    if d < 50:
-        forward = np.clip(
-            np.linalg.norm(grad_rep_norm) * np.cos(grad_angle_norm), -5, 5
-        )
-        rotation = np.linalg.norm(grad_rep_norm) * -np.sin(grad_angle_norm)
-        command = {"forward": forward, "rotation": rotation}
-        return command
-    
-    # Déduire une commande
-    if np.abs(grad_angle_norm) > np.pi / 2:
-        if grad_angle_norm > 0:
-            command = {"forward": 0, "rotation": 5}
-        else:
-            command = {"forward": 0, "rotation": -5}
-    else:
-        forward = np.clip(
-            np.linalg.norm(grad_rep_norm) * np.cos(grad_angle_norm), -5, 5
-        )
-        rotation = np.clip(
-            np.linalg.norm(grad_rep_norm) * np.sin(grad_angle_norm), -5, 5
-        )
-        command = {"forward": forward, "rotation": rotation}
+    #Cas touché - On s'arrête.
+    elif ecart_norm <= r_min :
+        velocity = 0
+        rotation = 0
+        
+    command = {"forward": velocity, "rotation": rotation}
     return command
