@@ -510,6 +510,7 @@ class TinySlam:
         # Si la touche "s" est appuyée, exécuter l'action souhaitée
         if key == ord('s'):
             
+            filename = input("Entrez le nom du fichier : ")    
             x = 50  # coordonnée x du coin supérieur gauche de la zone à sélectionner
             y = 150  # coordonnée y du coin supérieur gauche de la zone à sélectionner
             w = 600  # largeur de la zone à sélectionner
@@ -517,7 +518,7 @@ class TinySlam:
             img_rogned = img2[y:y+h, x:x+w]
 
             # Enregistrer l'image
-            cv2.imwrite("exemple_cartographie.png", img_rogned)
+            cv2.imwrite(filename, img_rogned)
 
         # Si la touche "ESC" est appuyée, quitter la boucle
         if key == 27:
