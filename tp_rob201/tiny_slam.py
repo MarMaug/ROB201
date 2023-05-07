@@ -416,14 +416,25 @@ class TinySlam:
     def detect_click(self,event, x, y, flags,param):
     # si l'utilisateur a cliqué avec le bouton gauche de la souris
         if event == cv2.EVENT_LBUTTONDOWN:
-            self.is_primary_goal = 1
+            
+            # Si l'emplacement est valide
             if self.occupancy_map[x,-y] <0:
+                
+                # Le goal redevient primaire
+                self.is_primary_goal = 1
+                
+                # J'actualise le goal selon les coordonées du clic de la souris
                 self.goal = np.array([self._conv_map_to_world(x,y)[0],
                                 -self._conv_map_to_world(x,y)[1], np.pi])
+                
+                # Je note le goal actuel comme étant primaire
                 self.primarygoal = self.goal
             else :
+                
                 print("The selected goal is not reachable by the robot")
+                
             self.click_coords = (x, y)
+        
         
     def display2(self, robot_pose):
         """
@@ -440,9 +451,11 @@ class TinySlam:
 
         cv2.namedWindow("map slam")
         
+        
+        # Detection d'un clic
         cv2.setMouseCallback("map slam", self.detect_click)
         
-        
+        # Dessiner la fleche rouge du robot
         pt2_x = robot_pose[0] + np.cos(robot_pose[2]) * 20
         pt2_y = robot_pose[1] + np.sin(robot_pose[2]) * 20
         
@@ -454,10 +467,12 @@ class TinySlam:
         
         cv2.arrowedLine(img=img2, pt1=pt1, pt2=pt2, color=(0, 0, 255), thickness=1)
         
+        # Dessiner le chemin retour vers le start
         for node in self.path:
             pt_node = (node[0], node[1])
             cv2.circle(img2, pt_node, 0, color=(0, 0, 255), thickness=-1)
         
+        # Ecrire le texte
         font = cv2.FONT_HERSHEY_SIMPLEX
         org = (50, 50)
         org2 = (50, 70)
@@ -475,16 +490,20 @@ class TinySlam:
                         fontScale, color, thickness, cv2.LINE_AA)
         
         pos_rob = (robot_pose[0], robot_pose[1])
-        pos_goal = (self.goal[0], self.goal[1])
         
-        if dist(pos_rob, pos_goal) <= 10:
-            cv2.putText(img2, "Goal reached !", (50,90), font, fontScale, (0,0,255), thickness, cv2.LINE_AA)
-            
         primarygoal = self._conv_world_to_map(self.primarygoal[0], -self.primarygoal[1])
-  
-        cv2.circle(img2, primarygoal, 2, color=(255, 255, 255), thickness=3)    
         
-        cv2.circle(img2, self._conv_world_to_map(0,0), 3, color=(0, 255, 0), thickness=-1, )
+        # Indiquer si on a atteint le goal primaire
+        if dist(pos_rob, [self.primarygoal[0], self.primarygoal[1]]) <= 10:
+            cv2.putText(img2, "Goal reached !", (50,90), font, fontScale, (0,0,255), thickness, cv2.LINE_AA)
+
+        # Dessiner un cercle blanc à l'emplacement du goal primaire
+        cv2.circle(img2, primarygoal, 2, color=(255, 255, 255), thickness=-1)    
+        
+        # Dessiner un cercle vert au start
+        cv2.circle(img2, self._conv_world_to_map(0,0), 3, color=(0, 255, 0), thickness=-1)
+        
+        # Show image
         cv2.imshow("map slam", img2)
         cv2.waitKey(1)
 
