@@ -487,7 +487,14 @@ class TinySlam:
         cv2.putText(img2, "Goal position : (" + str(round(self.goal[0])) + ", " + str(round(self.goal[1])) + ")", org2, font, 
                         fontScale, color, thickness, cv2.LINE_AA)
         
-        cv2.putText(img2, "Occupancy of the last selected point : " + str(self.occupancy_map[self.click_coords[0],-self.click_coords[1]]) , (50,110), font, 
+        type = ''
+        if self.occupancy_map[self.click_coords[0],-self.click_coords[1]] >3.0:
+            type = 'Obstacle'
+        elif self.occupancy_map[self.click_coords[0],-self.click_coords[1]] <-3.0:
+            type = 'Ground'
+        else:
+            type = "Out of bounds"
+        cv2.putText(img2, "Type of the last selected point : " + type , (50,110), font, 
                         fontScale, color, thickness, cv2.LINE_AA)
         
         pos_rob = (robot_pose[0], robot_pose[1])
