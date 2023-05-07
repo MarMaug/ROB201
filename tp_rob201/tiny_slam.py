@@ -505,8 +505,25 @@ class TinySlam:
         
         # Show image
         cv2.imshow("map slam", img2)
-        cv2.waitKey(1)
+        key = cv2.waitKey(1)
+        
+        # Si la touche "s" est appuyée, exécuter l'action souhaitée
+        if key == ord('s'):
+            
+            x = 50  # coordonnée x du coin supérieur gauche de la zone à sélectionner
+            y = 150  # coordonnée y du coin supérieur gauche de la zone à sélectionner
+            w = 600  # largeur de la zone à sélectionner
+            h = 700  # hauteur de la zone à sélectionner
+            img_rogned = img2[y:y+h, x:x+w]
 
+            # Enregistrer l'image
+            cv2.imwrite("exemple_cartographie.png", img_rogned)
+
+        # Si la touche "ESC" est appuyée, quitter la boucle
+        if key == 27:
+            exit()
+        
+        
     def save(self, filename):
         """
         Save map as image and pickle object
