@@ -8,8 +8,8 @@ import numpy as np
 from matplotlib import pyplot as plt
 import heapq
 import itertools
-import os
-
+import tkinter as tk
+from tkinter import filedialog, messagebox
 
 class TinySlam:
     """
@@ -510,21 +510,27 @@ class TinySlam:
         
         # Si la touche "s" est appuyée, exécuter l'action souhaitée
         if key == ord('s'):
-            print("hey")
-            filename = input("Entrez le nom du fichier : ") 
+            
+            root = tk.Tk()
+            root.withdraw()
+            
+            # Vérifier si l'utilisateur a confirmé la sauvegarde
+            confirmation = messagebox.askyesno("Confirmation", "Êtes-vous sûr de vouloir sauvegarder l'image ?")
+            
+            if confirmation:
+                chemin_destination = filedialog.asksaveasfilename(defaultextension='.png', filetypes=[('JPEG', '.jpg'), ('PNG', '.png')])
        
-            x = 50  # coordonnée x du coin supérieur gauche de la zone à sélectionner
-            y = 150  # coordonnée y du coin supérieur gauche de la zone à sélectionner
-            w = 600  # largeur de la zone à sélectionner
-            h = 700  # hauteur de la zone à sélectionner
-            img_rogned = img2[y:y+h, x:x+w]
-
-            # Enregistrer l'image
-            os.chdir('/images/')
-            cv2.imwrite(filename, img_rogned)
+                x = 50  # coordonnée x du coin supérieur gauche de la zone à sélectionner
+                y = 150  # coordonnée y du coin supérieur gauche de la zone à sélectionner
+                w = 600  # largeur de la zone à sélectionner
+                h = 700  # hauteur de la zone à sélectionner
+                img_rogned = img2[y:y+h, x:x+w]
+                
+                # Enregistrer l'image  
+                cv2.imwrite(chemin_destination, img_rogned)
 
         # Si la touche "ESC" est appuyée, quitter la boucle
-        if key == 27:
+        if key == 27 or key == ord('q'):
             exit()
         
         
