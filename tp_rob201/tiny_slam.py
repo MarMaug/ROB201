@@ -92,7 +92,8 @@ class TinySlam:
 
         return x_world, y_world
     
-#######################################################################################################
+    
+########################################################################################################
 
 
 ###################### PARTIE CLE : TRAITEMENT DE LA POSITION ET DE L'UPDATE DE LA MAP ################
@@ -220,7 +221,7 @@ class TinySlam:
             odom_pose_ref = self.odom_pose_ref
 
         odom_pose[0] = odom[0] + self.odom_pose_ref[0]*np.cos(odom[2] + self.odom_pose_ref[2])
-        odom_pose[1] = odom[1] + self.odom_pose_ref[0]*np.sin(odom[2] + self.odom_pose_ref[2])
+        odom_pose[1] = odom[1] + self.odom_pose_ref[1]*np.sin(odom[2] + self.odom_pose_ref[2])
         odom_pose[2] = odom[2] + self.odom_pose_ref[2]
             
         return odom_pose
@@ -341,10 +342,10 @@ class TinySlam:
     def A_Star(self, start, goal):
         
         # Initialisation
-        openSet = [(0, start)]         # On définit la liste de priorités : de base, c'est juste le start, de fScore h(start, goal)
+        openSet = [(self.h(start,goal), start)]         # On définit la liste de priorités : de base, c'est juste le start, de fScore h(start, goal)
 
         # Utiliser un set et non pas une liste est beaucoup plus rapide ( gain de temps : x10)
-        visited_nodes = set()
+        visited_nodes = []
         
         cameFrom = {start: None}             # Le point de départ n'a pas de prédécesseur
         
@@ -358,7 +359,7 @@ class TinySlam:
         # Tant que l'on a des noeuds à explorer
         while openSet is not []:
             # On pop le noeud avec le fScore le plus faible
-            min_fScore, current = heapq.heappop(openSet)
+            current = heapq.heappop(openSet)[1]
             
             # Si c'est le goal, banco
             if current == goal:
@@ -366,7 +367,7 @@ class TinySlam:
                 return path
             
             # Sinon, on regarde ses voisins
-            visited_nodes.add(current)
+            visited_nodes.append(current)
             neighbors = self.get_neighbors(current)
 
             # Pour chacun des voisins
@@ -482,6 +483,7 @@ class TinySlam:
         primarygoal = self._conv_world_to_map(self.primarygoal[0], -self.primarygoal[1])
   
         cv2.circle(img2, primarygoal, 2, color=(255, 255, 255), thickness=3)    
+        
         cv2.circle(img2, self._conv_world_to_map(0,0), 3, color=(0, 255, 0), thickness=-1, )
         cv2.imshow("map slam", img2)
         cv2.waitKey(1)

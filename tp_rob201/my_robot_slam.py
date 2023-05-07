@@ -81,8 +81,8 @@ class MyRobotSlam(RobotAbstract):
                 # On calcule le chemin retour le plus court grace à A*
                 start = time()
                 self.tiny_slam.path = self.tiny_slam.plan(np.array([0, 0, 0]), self.tiny_slam.get_corrected_pose(self.odometer_values(), None) )
-                print("Temps de calcul du chemin : ", round(time() - start,3), " s.")
-                
+                print("Temps de calcul du chemin : ", round(time()- start,3), " s.")
+                print(self.tiny_slam.path)
                 # On dit qu'on a atteint le goal primaire en mettant le booleen 'is_primary_goal' à 0
                 self.tiny_slam.is_primary_goal = 0
                 
@@ -95,11 +95,11 @@ class MyRobotSlam(RobotAbstract):
                 # Tant qu'on est dans le path de retour
                 if self.counter_back_to_start < len(self.tiny_slam.path)-3:
                     
+                    x_converti, y_converti = self.tiny_slam._conv_map_to_world(self.tiny_slam.path[self.counter_back_to_start][0],self.tiny_slam.path[self.counter_back_to_start][1])
                     # On update le goal à 3 itérations plus loin
                     self.counter_back_to_start +=3
-                    self.tiny_slam.goal = np.array([self.tiny_slam._conv_map_to_world(self.tiny_slam.path[self.counter_back_to_start][0],self.tiny_slam.path[self.counter_back_to_start][1])[0],
-                              - self.tiny_slam._conv_map_to_world(self.tiny_slam.path[self.counter_back_to_start][0],self.tiny_slam.path[self.counter_back_to_start][1])[1], np.pi])
-
+                    self.tiny_slam.goal = np.array([x_converti, -y_converti, np.pi])
+                    
                     # Dés qu'on sera arrivé, ca refera une itération, etc ...
                     
         return command 
