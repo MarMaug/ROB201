@@ -82,7 +82,7 @@ class MyRobotSlam(RobotAbstract):
                 start = time()
                 self.tiny_slam.path = self.tiny_slam.plan(np.array([0, 0, 0]), self.tiny_slam.get_corrected_pose(self.odometer_values(), None) )
                 print("Temps de calcul du chemin : ", round(time()- start,3), " s.")
-                print(self.tiny_slam.path)
+                
                 # On dit qu'on a atteint le goal primaire en mettant le booleen 'is_primary_goal' à 0
                 self.tiny_slam.is_primary_goal = 0
                 

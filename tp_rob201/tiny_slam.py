@@ -11,6 +11,7 @@ import itertools
 import tkinter as tk
 from tkinter import filedialog, messagebox
 
+
 class TinySlam:
     """
     Simple occupancy grid SLAM
@@ -53,10 +54,8 @@ class TinySlam:
         self.is_primary_goal = 1
         
         # Goal of the robot
-        self.click_coords = (583, 327)
-        self.goal = np.array([self._conv_map_to_world(self.click_coords[0],self.click_coords[1])[0],
-                              -self._conv_map_to_world(self.click_coords[0],self.click_coords[1])[1], np.pi])
-        
+        self.goal = np.array([11, -426, np.pi])
+        self.click_coords = (self._conv_world_to_map(self.goal[0], -self.goal[1]))
         self.primarygoal = self.goal
         
 #########################################################################################################
@@ -419,7 +418,7 @@ class TinySlam:
         if event == cv2.EVENT_LBUTTONDOWN:
             
             # Si l'emplacement est valide
-            if self.occupancy_map[x,-y] <0:
+            if self.occupancy_map[x,-y] <3.0:
                 
                 # Le goal redevient primaire
                 self.is_primary_goal = 1
@@ -494,6 +493,7 @@ class TinySlam:
             type = 'Ground'
         else:
             type = "Out of bounds"
+            
         cv2.putText(img2, "Type of the last selected point : " + type , (50,110), font, 
                         fontScale, color, thickness, cv2.LINE_AA)
         
@@ -510,7 +510,7 @@ class TinySlam:
         
         # Dessiner un cercle vert au start
         cv2.circle(img2, self._conv_world_to_map(0,0), 3, color=(0, 255, 0), thickness=-1)
-        
+     
         # Show image
         cv2.imshow("map slam", img2)
         key = cv2.waitKey(1)
@@ -525,16 +525,10 @@ class TinySlam:
             confirmation = messagebox.askyesno("Confirmation", "Êtes-vous sûr de vouloir sauvegarder l'image ?")
             
             if confirmation:
-                chemin_destination = filedialog.asksaveasfilename(defaultextension='.png', filetypes=[('JPEG', '.jpg'), ('PNG', '.png')])
+                chemin_destination = filedialog.asksaveasfilename(defaultextension='PNG', filetypes=[('PNG', '.png'), ('JPEG', '.jpg')])
        
-                x = 50  # coordonnée x du coin supérieur gauche de la zone à sélectionner
-                y = 150  # coordonnée y du coin supérieur gauche de la zone à sélectionner
-                w = 600  # largeur de la zone à sélectionner
-                h = 700  # hauteur de la zone à sélectionner
-                img_rogned = img2[y:y+h, x:x+w]
-                
                 # Enregistrer l'image  
-                cv2.imwrite(chemin_destination, img_rogned)
+                cv2.imwrite(chemin_destination, img2)
 
         # Si la touche "ESC" est appuyée, quitter la boucle
         if key == 27 or key == ord('q'):

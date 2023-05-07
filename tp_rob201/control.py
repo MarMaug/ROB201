@@ -34,9 +34,9 @@ def potential_field_control(lidar, pose, goal):
     goal : [x, y, theta] nparray, target pose in odom or world frame
     """
     # A twister selon les usages
-    d_change = 50
+    d_change = 40
     r_min = 10
-    d_safe = 20
+    d_safe = 40
 
     # On récupère les données 
     distances = lidar.get_sensor_values()
@@ -57,7 +57,7 @@ def potential_field_control(lidar, pose, goal):
     
     # Si je suis en dessous de la d_safe, je calcule le gradient d'evitement d'obstacle
     if mindist < d_safe :
-        Kobs = 5000
+        Kobs = 40000
         gradient_obstacle = Kobs/(mindist**3)*((1/mindist)-(1/d_safe))*(obstacle_position - np.array([pose[0],pose[1]]))
     else :
         gradient_obstacle = np.array([0,0])
@@ -71,13 +71,13 @@ def potential_field_control(lidar, pose, goal):
         gradient_angle = np.arctan2(gradient[1], gradient[0])
         gradient_norme = np.linalg.norm(gradient)
         velocity = np.clip(gradient_norme*np.cos(gradient_angle-pose[2]), -1, 1)
-        rotation = np.clip(gradient_norme*np.sin(gradient_angle-pose[2]), -1, 1)
+        rotation = np.clip(3*gradient_norme*np.sin(gradient_angle-pose[2]), -1, 1)
 
     #Cas proche - Potentiel quadratique.
     elif r_min < ecart_norm <= d_change :
         
         #print("Approaching the goal")
-        Kquad = 0.2/d_change
+        Kquad = 0.1/d_change
         gradient = np.array([Kquad*ecart[0], Kquad*ecart[1]])
         #print("Old Gradient : ", gradient)
         gradient = gradient - gradient_obstacle
