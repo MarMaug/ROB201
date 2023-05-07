@@ -345,7 +345,7 @@ class TinySlam:
         openSet = [(self.h(start,goal), start)]         # On définit la liste de priorités : de base, c'est juste le start, de fScore h(start, goal)
 
         # Utiliser un set et non pas une liste est beaucoup plus rapide ( gain de temps : x10)
-        visited_nodes = []
+        visited_nodes = set()
         
         cameFrom = {start: None}             # Le point de départ n'a pas de prédécesseur
         
@@ -367,7 +367,7 @@ class TinySlam:
                 return path
             
             # Sinon, on regarde ses voisins
-            visited_nodes.append(current)
+            visited_nodes.add(current)
             neighbors = self.get_neighbors(current)
 
             # Pour chacun des voisins
