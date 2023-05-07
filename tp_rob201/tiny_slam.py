@@ -28,6 +28,8 @@ class TinySlam:
         
     """
     
+    ##################################### INITIALISATION ###################################
+    
     def __init__(self, x_min, x_max, y_min, y_max, resolution):
         # Given : constructor
         self.x_min_world = x_min
@@ -46,8 +48,8 @@ class TinySlam:
         # Initial path from the start to the robot
         self.path = []
         
-        #Counter
-        self.counter = 1
+        #Boolean to indicate if we reached the primary goal
+        self.is_primary_goal = 1
         
         # Goal of the robot
         self.click_coords = (583, 327)
@@ -55,16 +57,10 @@ class TinySlam:
                               -self._conv_map_to_world(self.click_coords[0],self.click_coords[1])[1], np.pi])
         
         self.primarygoal = self.goal
+        
+#########################################################################################################
 
-    def goal_from_click(self):
-        if self.counter == 1:
-            if self.occupancy_map[self.click_coords[0],-self.click_coords[1]] <0:
-                self.goal = np.array([self._conv_map_to_world(self.click_coords[0],self.click_coords[1])[0],
-                                -self._conv_map_to_world(self.click_coords[0],self.click_coords[1])[1], np.pi])
-                self.primarygoal = self.goal
-            else :
-                print("The selected goal is not reachable by the robot")
-
+################################### PARTIE CONVERSION DES COORDONEES ####################################
     def _conv_world_to_map(self, x_world, y_world):
         """
         Convert from world coordinates to map coordinates (i.e. cell index in the grid map)
@@ -95,6 +91,11 @@ class TinySlam:
             y_world = y_world.astype(float)
 
         return x_world, y_world
+    
+#######################################################################################################
+
+
+###################### PARTIE CLE : TRAITEMENT DE LA POSITION ET DE L'UPDATE DE LA MAP ################
 
     def add_map_line(self, x_0, y_0, x_1, y_1, val):
         """
@@ -306,8 +307,11 @@ class TinySlam:
         
         # Affichage de la carte mise à jour
         self.display2(pose)
+        
+#####################################################################################################
 
-#########################################################################################
+
+######################### PARTIE CALCUL DU CHEMIN DE RETOUR #########################################
 
     # Version "boostée" de get_neighbors, qui est beaucoup moins chronophage
     def get_neighbors(self, current):
@@ -333,7 +337,6 @@ class TinySlam:
             total_path.append(current)
             
         return total_path
-
 
     def A_Star(self, start, goal):
         
@@ -405,11 +408,14 @@ class TinySlam:
 
 #########################################################################################
 
+
+############################ PARTIE AFFICHAGE ECRAN ET SAUVEGARDE #######################
+
     # fonction appelée lorsqu'un clic de souris est détecté
     def detect_click(self,event, x, y, flags,param):
     # si l'utilisateur a cliqué avec le bouton gauche de la souris
         if event == cv2.EVENT_LBUTTONDOWN:
-            self.counter =1
+            self.is_primary_goal = 1
             if self.occupancy_map[x,-y] <0:
                 self.goal = np.array([self._conv_map_to_world(x,y)[0],
                                 -self._conv_map_to_world(x,y)[1], np.pi])

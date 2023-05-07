@@ -43,12 +43,26 @@ class MyRobotSlam(RobotAbstract):
         # storage for pose after localization
         self.corrected_pose = np.array([0, 0, 0])
           
-        # Counter to follow the path back to the start
-        self.counter = 0
-        
+        # Counter to follow where we are in the path back to the start
+        self.counter_back_to_start = 0
+    
+    
     def control(self):
         """
         Main control function executed at each time step
+        At each time step, 
+            - We update the odometry, the lidar and the map
+            - We calculate the command to give to the robot to reach the goal (may it be the primary one or not)
+            - If we reached a goal, 2 possible cases :
+                    
+                    - If we reached the "primary" goal, displayed in white on the map (indicated by the boolean "is_primary_goal"):
+                        We calculate the shortest path from our start point and we indicate we reached the goal
+                        We prepare to go back to the start, by setting our counter "back_to_start" to 0
+                    
+                    - If we reached an intermediate goal while coming down the path:
+                        We go to the next goal down the path (here, it's 3 steps further)
+
+            - We return the command
         """
       
         # Localising and exploring
@@ -61,17 +75,31 @@ class MyRobotSlam(RobotAbstract):
         # Si on est arrivé
         if dist(self.tiny_slam.get_corrected_pose(self.odometer_values(), None), self.tiny_slam.goal) <=10:
             
-            if self.tiny_slam.counter == 1:
+            # Si on est au goal primaire (celui de base, ou celui indiqué par un clic de souris)
+            if self.tiny_slam.is_primary_goal:
+                
+                # On calcule le chemin retour le plus court grace à A*
                 start = time()
                 self.tiny_slam.path = self.tiny_slam.plan(np.array([0, 0, 0]), self.tiny_slam.get_corrected_pose(self.odometer_values(), None) )
                 print("Temps de calcul du chemin : ", round(time() - start,3), " s.")
-                self.tiny_slam.counter = 0
-                self.counter = 0
-            else:
-                #print("Trop proche du nouveau goal : on actualise")
-                if self.counter < len(self.tiny_slam.path)-3:
-                    self.counter+=3
-                    self.tiny_slam.goal = np.array([self.tiny_slam._conv_map_to_world(self.tiny_slam.path[self.counter][0],self.tiny_slam.path[self.counter][1])[0],
-                              - self.tiny_slam._conv_map_to_world(self.tiny_slam.path[self.counter][0],self.tiny_slam.path[self.counter][1])[1], np.pi])
                 
+                # On dit qu'on a atteint le goal primaire en mettant le booleen 'is_primary_goal' à 0
+                self.tiny_slam.is_primary_goal = 0
+                
+                # On réinitialise le compteur de retour à 0 pour dire qu'on repart au début du chemin de retour
+                self.counter_back_to_start = 0
+            
+            else:
+                #print("Arrivé au goal intermediaire : on va au suivant")
+                
+                # Tant qu'on est dans le path de retour
+                if self.counter_back_to_start < len(self.tiny_slam.path)-3:
+                    
+                    # On update le goal à 3 itérations plus loin
+                    self.counter_back_to_start +=3
+                    self.tiny_slam.goal = np.array([self.tiny_slam._conv_map_to_world(self.tiny_slam.path[self.counter_back_to_start][0],self.tiny_slam.path[self.counter_back_to_start][1])[0],
+                              - self.tiny_slam._conv_map_to_world(self.tiny_slam.path[self.counter_back_to_start][0],self.tiny_slam.path[self.counter_back_to_start][1])[1], np.pi])
+
+                    # Dés qu'on sera arrivé, ca refera une itération, etc ...
+                    
         return command 
